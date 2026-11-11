@@ -1,6 +1,6 @@
 require("dotenv").config();
 const dns = require("dns");
-const { MongoClient } = require("mongodb");
+const { MongoClient, ObjectId } = require("mongodb");
 
 // Some local resolvers refuse SRV lookups required by mongodb+srv:// URIs.
 if (process.env.MONGODB_DNS_SERVERS) {
@@ -64,6 +64,31 @@ app.get("/destination", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch destinations." });
+  }
+});
+
+// Get a single destination by id
+app.get("/destination/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid destination id." });
+    }
+
+    const destination = await client
+      .db(DB_NAME)
+      .collection(DESTINATION_COLLECTION)
+      .findOne({ _id: new ObjectId(id) });
+
+    if (!destination) {
+      return res.status(404).json({ error: "Destination not found." });
+    }
+
+    res.json(destination);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch destination." });
   }
 });
 
