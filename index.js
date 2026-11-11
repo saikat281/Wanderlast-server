@@ -92,6 +92,47 @@ app.get("/destination/:id", async (req, res) => {
   }
 });
 
+// Update a destination by id
+app.patch("/destination/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid destination id." });
+    }
+
+    const updates = { ...req.body };
+    delete updates._id;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "No fields provided to update." });
+    }
+
+    updates.updatedAt = new Date();
+
+    const destination = await client
+      .db(DB_NAME)
+      .collection(DESTINATION_COLLECTION)
+      .findOneAndUpdate(
+        { _id: new ObjectId(id) },
+        { $set: updates },
+        { returnDocument: "after" }
+      );
+
+    if (!destination) {
+      return res.status(404).json({ error: "Destination not found." });
+    }
+
+    res.json({
+      message: "Destination updated successfully.",
+      destination,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update destination." });
+  }
+});
+
 // Create a destination
 app.post("/destination", async (req, res) => {
   try {
