@@ -1,5 +1,11 @@
 require("dotenv").config();
+const dns = require("dns");
 const { MongoClient } = require("mongodb");
+
+// Some local resolvers refuse SRV lookups required by mongodb+srv:// URIs.
+if (process.env.MONGODB_DNS_SERVERS) {
+  dns.setServers(process.env.MONGODB_DNS_SERVERS.split(",").map((s) => s.trim()));
+}
 
 const client = new MongoClient(process.env.MONGODB_URI);
 
@@ -7,13 +13,24 @@ const express = require("express");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-
+const DB_NAME = process.env.DB_NAME || "wanderlast";
+const DESTINATION_COLLECTION = "destination";
 
 async function connectToMongoDB() {
   try {
     await client.connect();
     console.log("You successfully connected to MongoDB!");
+
+    // Create the "wanderlast" database and "destination" collection if missing.
+    const db = client.db(DB_NAME);
+    const collections = await db
+      .listCollections({ name: DESTINATION_COLLECTION })
+      .toArray();
+    if (collections.length === 0) {
+      await db.createCollection(DESTINATION_COLLECTION);
+      console.log(`Created collection "${DESTINATION_COLLECTION}" in database "${DB_NAME}"`);
+    }
+
     return client;
   } catch (err) {
     console.dir(err);
@@ -25,12 +42,35 @@ async function disconnectFromMongoDB() {
 }
 
 // Middleware
-// app.use(express.json());
-// app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.get("/", (req, res) => {
   res.send("server is Running fine!")
+});
+
+// Create a destination
+app.post("/destination", async (req, res) => {
+  try {
+    const destination = {
+      ...req.body,
+      createdAt: new Date(),
+    };
+
+    const result = await client
+      .db(DB_NAME)
+      .collection(DESTINATION_COLLECTION)
+      .insertOne(destination);
+
+    res.status(201).json({
+      message: "Destination created successfully.",
+      destination: { _id: result.insertedId, ...destination },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to create destination." });
+  }
 });
 
 // app.get("/health", (req, res) => {
@@ -50,8 +90,13 @@ app.get("/", (req, res) => {
 //   });
 // });
 
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+async function startServer() {
+  await connectToMongoDB();
+  app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+  });
+}
+
+startServer();
 
 module.exports = { app, connectToMongoDB, disconnectFromMongoDB };
