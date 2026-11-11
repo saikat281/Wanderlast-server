@@ -50,6 +50,23 @@ app.get("/", (req, res) => {
   res.send("server is Running fine!")
 });
 
+// List all destinations
+app.get("/destination", async (req, res) => {
+  try {
+    const destinations = await client
+      .db(DB_NAME)
+      .collection(DESTINATION_COLLECTION)
+      .find({})
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.json(destinations);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch destinations." });
+  }
+});
+
 // Create a destination
 app.post("/destination", async (req, res) => {
   try {
