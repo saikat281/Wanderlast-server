@@ -133,6 +133,31 @@ app.patch("/destination/:id", async (req, res) => {
   }
 });
 
+// Delete a destination by id
+app.delete("/destination/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid destination id." });
+    }
+
+    const result = await client
+      .db(DB_NAME)
+      .collection(DESTINATION_COLLECTION)
+      .deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Destination not found." });
+    }
+
+    res.json({ message: "Destination deleted successfully." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to delete destination." });
+  }
+});
+
 // Create a destination
 app.post("/destination", async (req, res) => {
   try {
