@@ -10,6 +10,7 @@ if (process.env.MONGODB_DNS_SERVERS) {
 const client = new MongoClient(process.env.MONGODB_URI);
 
 const express = require("express");
+const { createRemoteJWKSet, jwtVerify } = require("jose-cjs");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -49,6 +50,38 @@ async function disconnectFromMongoDB() {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const JWKS = createRemoteJWKSet(
+  new URL('http://localhost:3000/api/auth/jwks')
+)
+
+
+const verifyToken = async (req, res, next) => {
+  const authHeader = req?.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ message: "Unauthorized access!" })
+  }
+
+  const token = authHeader.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized access!" })
+  }
+
+  //  console.log(token);
+
+  try {
+    const { payload } = await jwtVerify(token, JWKS)
+
+    console.log(payload)
+
+    next();
+  } catch (error) {
+    res.status(403).json({ message: "forbidden" });
+  }
+
+
+}
+
 // Routes
 app.get("/", (req, res) => {
   res.send("server is Running fine!")
@@ -72,7 +105,7 @@ app.get("/destination", async (req, res) => {
 });
 
 // Get a single destination by id
-app.get("/destination/:id", async (req, res) => {
+app.get("/destination/:id",verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -97,7 +130,7 @@ app.get("/destination/:id", async (req, res) => {
 });
 
 // Update a destination by id
-app.patch("/destination/:id", async (req, res) => {
+app.patch("/destination/:id",verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -138,7 +171,7 @@ app.patch("/destination/:id", async (req, res) => {
 });
 
 // Delete a destination by id
-app.delete("/destination/:id", async (req, res) => {
+app.delete("/destination/:id",verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -163,7 +196,7 @@ app.delete("/destination/:id", async (req, res) => {
 });
 
 // Create a destination
-app.post("/destination", async (req, res) => {
+app.post("/destination",verifyToken, async (req, res) => {
   try {
     const destination = {
       ...req.body,
@@ -186,7 +219,7 @@ app.post("/destination", async (req, res) => {
 });
 
 // Create a booking
-app.post("/booking", async (req, res) => {
+app.post("/booking",verifyToken, async (req, res) => {
   try {
     const { destinationId, ...bookingDetails } = req.body || {};
 
@@ -230,7 +263,7 @@ app.post("/booking", async (req, res) => {
 });
 
 // List all bookings for a specific user
-app.get("/booking/:userId", async (req, res) => {
+app.get("/booking/:userId", verifyToken, async (req, res) => {
   try {
     const { userId } = req.params;
 
@@ -253,7 +286,7 @@ app.get("/booking/:userId", async (req, res) => {
 });
 
 // Delete a booking by id
-app.delete("/booking/:id", async (req, res) => {
+app.delete("/booking/:id",verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -277,22 +310,6 @@ app.delete("/booking/:id", async (req, res) => {
   }
 });
 
-// app.get("/health", (req, res) => {
-//   res.json({ status: "healthy" });
-// });
-
-// // 404 handler
-// app.use((req, res) => {
-//   res.status(404).json({ error: "Not Found", path: req.originalUrl });
-// });
-
-// // Error handler
-// app.use((err, req, res, next) => {
-//   console.error(err);
-//   res.status(err.status || 500).json({
-//     error: err.message || "Internal Server Error",
-//   });
-// });
 
 async function startServer() {
   await connectToMongoDB();
