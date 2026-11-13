@@ -229,6 +229,54 @@ app.post("/booking", async (req, res) => {
   }
 });
 
+// List all bookings for a specific user
+app.get("/booking/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ error: "userId is required." });
+    }
+
+    const bookings = await client
+      .db(DB_NAME)
+      .collection(BOOKING_COLLECTION)
+      .find({ userId })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.json(bookings);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch bookings." });
+  }
+});
+
+// Delete a booking by id
+app.delete("/booking/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid booking id." });
+    }
+
+    const result = await client
+      .db(DB_NAME)
+      .collection(BOOKING_COLLECTION)
+      .deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Booking not found." });
+    }
+
+    res.json({ message: "Booking deleted successfully." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to delete booking." });
+  }
+});
+
 // app.get("/health", (req, res) => {
 //   res.json({ status: "healthy" });
 // });
