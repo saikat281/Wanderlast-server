@@ -15,20 +15,24 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const DB_NAME = process.env.DB_NAME || "wanderlast";
 const DESTINATION_COLLECTION = "destination";
+const BOOKING_COLLECTION = "booking";
 
 async function connectToMongoDB() {
   try {
     await client.connect();
     console.log("You successfully connected to MongoDB!");
 
-    // Create the "wanderlast" database and "destination" collection if missing.
+    // Create the "wanderlast" database and collections if missing.
     const db = client.db(DB_NAME);
-    const collections = await db
-      .listCollections({ name: DESTINATION_COLLECTION })
-      .toArray();
-    if (collections.length === 0) {
-      await db.createCollection(DESTINATION_COLLECTION);
-      console.log(`Created collection "${DESTINATION_COLLECTION}" in database "${DB_NAME}"`);
+
+    for (const collectionName of [DESTINATION_COLLECTION, BOOKING_COLLECTION]) {
+      const collections = await db
+        .listCollections({ name: collectionName })
+        .toArray();
+      if (collections.length === 0) {
+        await db.createCollection(collectionName);
+        console.log(`Created collection "${collectionName}" in database "${DB_NAME}"`);
+      }
     }
 
     return client;
@@ -178,6 +182,50 @@ app.post("/destination", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to create destination." });
+  }
+});
+
+// Create a booking
+app.post("/booking", async (req, res) => {
+  try {
+    const { destinationId, ...bookingDetails } = req.body || {};
+
+    if (!destinationId) {
+      return res.status(400).json({ error: "destinationId is required." });
+    }
+
+    if (!ObjectId.isValid(destinationId)) {
+      return res.status(400).json({ error: "Invalid destinationId." });
+    }
+
+    const db = client.db(DB_NAME);
+
+    const destination = await db
+      .collection(DESTINATION_COLLECTION)
+      .findOne({ _id: new ObjectId(destinationId) });
+
+    if (!destination) {
+      return res.status(404).json({ error: "Destination not found." });
+    }
+
+    const booking = {
+      ...bookingDetails,
+      // Keep the destinationId in its original string format. Convert it to an
+      // ObjectId later if/when joins against the destination collection need it.
+      destinationId,
+      status: bookingDetails.status || "pending",
+      createdAt: new Date(),
+    };
+
+    const result = await db.collection(BOOKING_COLLECTION).insertOne(booking);
+
+    res.status(201).json({
+      message: "Booking created successfully.",
+      booking: { _id: result.insertedId, ...booking },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to create booking." });
   }
 });
 
